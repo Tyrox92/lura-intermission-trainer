@@ -1,12 +1,16 @@
-# L'ura Crystal Trainer v2
+# L'ura Crystal Trainer v3
 
-Änderungen in v2:
+Änderungen in v3:
 
-- Shift + Q Drop gefixt.
-- Crystal wird nach dem Drop nicht sofort wieder eingesammelt.
-- Du musst kurz aus dem Crystal rauslaufen, dann wird Pickup wieder aktiv.
-- Starsplinter hat jetzt 3 Sekunden Warnzeit.
-- Starsplinter verursacht erst bei der Explosion Schaden am Crystal, nicht während der Warnphase.
+- Crystal-Indikator sitzt jetzt kleiner im Player-Kreis.
+- Erstes Setup beim Öffnen:
+  - Player wählen
+  - Action-Button für Crystal-Drop aufnehmen
+- Action-Button kann eine Einzeltaste oder Kombination sein, zum Beispiel B, F4, Ctrl + X, Alt + Q oder Shift + Q.
+- Player kann später rechts in den Optionen geändert werden.
+- Action-Button kann später rechts in den Optionen geändert werden.
+- Laufbereich wurde etwas näher an den Rand erweitert.
+- Settings werden im Browser per localStorage gespeichert.
 
 ## Lokal starten
 
@@ -19,4 +23,4 @@ npm run dev
 
 Build Command: `npm run build`  
 Output Directory: `dist`  
-Framework Preset: Vite
+Framework Preset: `Vite`

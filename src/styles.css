@@ -15,6 +15,11 @@ body {
   color: #fff;
 }
 
+button,
+select {
+  font: inherit;
+}
+
 button {
   cursor: pointer;
   border: 0;
@@ -23,6 +28,22 @@ button {
   font-weight: 800;
   color: #020617;
   background: #38bdf8;
+}
+
+select {
+  width: 100%;
+  margin-top: 7px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(100, 116, 139, 0.9);
+  background: #0f172a;
+  color: white;
+}
+
+label {
+  display: block;
+  color: #cbd5e1;
+  font-weight: 700;
 }
 
 .app {
@@ -143,25 +164,40 @@ button {
 }
 
 .playerIcon {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   background: #7dd3fc;
   border: 2px solid white;
   box-shadow: 0 0 14px rgba(125, 211, 252, 0.8);
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.playerIcon.hasCrystal {
+  box-shadow: 0 0 14px rgba(125, 211, 252, 0.8), 0 0 16px rgba(253, 224, 71, 0.95);
+}
+
+.innerCrystal {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #fde047;
+  border: 1px solid #fef9c3;
+  box-shadow: 0 0 9px rgba(253, 224, 71, 0.95);
 }
 
 .playerName {
   position: absolute;
   left: 50%;
-  top: 34px;
+  top: 36px;
   transform: translateX(-50%);
   color: #e0f2fe;
   font-weight: 800;
 }
 
-.crystal,
-.carriedCrystal {
+.crystal {
   position: absolute;
   transform: translate(-50%, -50%);
   border-radius: 50%;
@@ -173,13 +209,6 @@ button {
 .crystal.pickupReady {
   outline: 3px solid rgba(34, 197, 94, 0.85);
   outline-offset: 3px;
-}
-
-.carriedCrystal {
-  left: 50%;
-  top: -22px;
-  width: 28px;
-  height: 28px;
 }
 
 .star {
@@ -263,6 +292,44 @@ button {
   line-height: 1.5;
 }
 
+.settingsBox {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(30, 41, 59, 0.78);
+  border: 1px solid rgba(71, 85, 105, 0.9);
+}
+
+.keybindRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.keybindRow span,
+.recordBox span {
+  display: block;
+  color: #94a3b8;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.keybindRow b,
+.recordBox b {
+  display: block;
+  margin-top: 4px;
+  font-size: 18px;
+}
+
+.smallButton {
+  padding: 9px 13px;
+  white-space: nowrap;
+}
+
 .stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -316,6 +383,56 @@ button {
 .restart {
   width: 100%;
   margin-top: 18px;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 6, 23, 0.82);
+  z-index: 20;
+  padding: 18px;
+}
+
+.modalOverlay.topLayer {
+  z-index: 30;
+}
+
+.modal {
+  width: min(460px, 100%);
+  border-radius: 22px;
+  padding: 24px;
+  background: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.55);
+}
+
+.modal h2 {
+  margin: 0 0 8px;
+  font-size: 30px;
+}
+
+.modal p {
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+.recordBox {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(30, 41, 59, 0.78);
+  border: 1px solid rgba(71, 85, 105, 0.9);
+}
+
+.recordBox button {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.keyModal {
+  text-align: center;
 }
 
 @media (max-width: 1100px) {

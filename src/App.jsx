@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
+const STORAGE_KEY = 'lura-crystal-trainer-settings-v3';
+
 const ARENA = 720;
 const CENTER = ARENA / 2;
-const RADIUS = 330;
+const RADIUS = 350;
 const PLAYER_R = 10;
 const CRYSTAL_R = 13;
 const PLAYER_SPEED = 210;
@@ -23,6 +25,15 @@ const STAR_COUNT_MAX = 6;
 
 const PICKUP_DISTANCE = PLAYER_R + CRYSTAL_R + 5;
 const REARM_PICKUP_DISTANCE = PLAYER_R + CRYSTAL_R + 18;
+
+const DEFAULT_ACTION_COMBO = {
+  code: 'KeyQ',
+  key: 'Q',
+  ctrl: false,
+  shift: true,
+  alt: false,
+  meta: false,
+};
 
 const raid = [
   ['Pains', 250, 95],
@@ -146,13 +157,17 @@ function starHitsCircle(pos, star, circle, radius) {
   return false;
 }
 
-function initialGame() {
-  const frost = raid.find(([n]) => n === 'Frost');
+function getRaidMember(name) {
+  return raid.find(([n]) => n === name) || raid.find(([n]) => n === 'Frost');
+}
+
+function initialGame(playerName = 'Frost') {
+  const player = getRaidMember(playerName);
   return {
     running: true,
     failed: null,
     time: 0,
-    player: { x: frost[1], y: frost[2] },
+    player: { x: player[1], y: player[2] },
     hasCrystal: true,
     crystal: null,
     beams: [],
@@ -166,33 +181,154 @@ function initialGame() {
   };
 }
 
-export default function App() {
-  const [game, setGame] = useState(initialGame);
-  const keys = useRef({});
-  const last = useRef(performance.now());
-  const shiftQDown = useRef(false);
-  const teammates = useMemo(() => raid.map(([name, x, y]) => ({ name, x, y })), []);
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (saved?.playerName && saved?.actionCombo?.code) return saved;
+  } catch {
+    return null;
+  }
+  return null;
+}
 
-  function restart() {
-    shiftQDown.current = false;
+function saveSettings(settings) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+}
+
+function eventToCombo(e) {
+  const isOnlyModifier = ['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight'].includes(e.code);
+  if (isOnlyModifier) return null;
+
+  return {
+    code: e.code,
+    key: prettyKey(e),
+    ctrl: e.ctrlKey,
+    shift: e.shiftKey,
+    alt: e.altKey,
+    meta: e.metaKey,
+  };
+}
+
+function prettyKey(e) {
+  if (e.code.startsWith('Key')) return e.code.replace('Key', '').toUpperCase();
+  if (e.code.startsWith('Digit')) return e.code.replace('Digit', '');
+  if (e.code.startsWith('Numpad')) return e.code.replace('Numpad', 'Num ');
+  if (e.code === 'Space') return 'Space';
+  if (e.code === 'Escape') return 'Esc';
+  return e.code.replace('Arrow', '').replace('Control', 'Ctrl');
+}
+
+function comboLabel(combo) {
+  if (!combo?.code) return 'nicht gesetzt';
+  const parts = [];
+  if (combo.ctrl) parts.push('Ctrl');
+  if (combo.shift) parts.push('Shift');
+  if (combo.alt) parts.push('Alt');
+  if (combo.meta) parts.push('Meta');
+  parts.push(combo.key || combo.code);
+  return parts.join(' + ');
+}
+
+function comboMatchesEvent(combo, e) {
+  if (!combo) return false;
+  return (
+    combo.code === e.code &&
+    Boolean(combo.ctrl) === e.ctrlKey &&
+    Boolean(combo.shift) === e.shiftKey &&
+    Boolean(combo.alt) === e.altKey &&
+    Boolean(combo.meta) === e.metaKey
+  );
+}
+
+export default function App() {
+  const initialSettings = loadSettings();
+  const [playerName, setPlayerName] = useState(initialSettings?.playerName || 'Frost');
+  const [actionCombo, setActionCombo] = useState(initialSettings?.actionCombo || DEFAULT_ACTION_COMBO);
+  const [setupOpen, setSetupOpen] = useState(!initialSettings);
+  const [recording, setRecording] = useState(false);
+
+  const [game, setGame] = useState(() => initialGame(initialSettings?.playerName || 'Frost'));
+  const keys = useRef({});
+  const actionPressed = useRef(false);
+  const last = useRef(performance.now());
+  const actionComboRef = useRef(actionCombo);
+  const playerNameRef = useRef(playerName);
+
+  const teammates = useMemo(
+    () => raid.map(([name, x, y]) => ({ name, x, y })).filter((t) => t.name !== playerName),
+    [playerName]
+  );
+
+  useEffect(() => {
+    actionComboRef.current = actionCombo;
+  }, [actionCombo]);
+
+  useEffect(() => {
+    playerNameRef.current = playerName;
+  }, [playerName]);
+
+  function restart(nextPlayerName = playerNameRef.current) {
+    actionPressed.current = false;
     last.current = performance.now();
-    setGame(initialGame());
+    setGame(initialGame(nextPlayerName));
+  }
+
+  function applySettings(nextPlayerName = playerName, nextCombo = actionCombo) {
+    saveSettings({ playerName: nextPlayerName, actionCombo: nextCombo });
+    setSetupOpen(false);
+    restart(nextPlayerName);
+  }
+
+  function handlePlayerChange(name) {
+    setPlayerName(name);
+    saveSettings({ playerName: name, actionCombo });
+    restart(name);
+  }
+
+  function handleRecordKey(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const combo = eventToCombo(e);
+    if (!combo) return;
+
+    setActionCombo(combo);
+    saveSettings({ playerName, actionCombo: combo });
+    setRecording(false);
   }
 
   useEffect(() => {
+    if (!recording) return;
+
+    window.addEventListener('keydown', handleRecordKey, { passive: false });
+    return () => window.removeEventListener('keydown', handleRecordKey);
+  }, [recording, playerName, actionCombo]);
+
+  useEffect(() => {
     const down = (e) => {
-      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
+      const movementKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD'];
+      const actionHit = comboMatchesEvent(actionComboRef.current, e);
+
+      if (movementKeys.includes(e.code) || actionHit) {
         e.preventDefault();
       }
+
       keys.current[e.code] = true;
+
+      if (actionHit && !e.repeat) {
+        actionPressed.current = true;
+      }
     };
 
     const up = (e) => {
-      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
+      const movementKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD'];
+      const actionHit = comboMatchesEvent(actionComboRef.current, e);
+
+      if (movementKeys.includes(e.code) || actionHit) {
         e.preventDefault();
       }
+
       keys.current[e.code] = false;
-      if (e.code === 'KeyQ') shiftQDown.current = false;
     };
 
     window.addEventListener('keydown', down, { passive: false });
@@ -211,7 +347,7 @@ export default function App() {
       last.current = nowMs;
 
       setGame((g) => {
-        if (!g.running) return g;
+        if (!g.running || setupOpen || recording) return g;
 
         let ng = { ...g, time: g.time + dt };
         const now = ng.time;
@@ -234,9 +370,8 @@ export default function App() {
           if (inArena(candidate, PLAYER_R)) ng.player = candidate;
         }
 
-        const shiftPressed = keys.current.ShiftLeft || keys.current.ShiftRight;
-        if (shiftPressed && keys.current.KeyQ && !shiftQDown.current) {
-          shiftQDown.current = true;
+        if (actionPressed.current) {
+          actionPressed.current = false;
           if (ng.hasCrystal) {
             ng.hasCrystal = false;
             ng.crystal = {
@@ -276,7 +411,11 @@ export default function App() {
 
         if (now >= ng.nextStars && now < SIM_SECONDS - 3) {
           const count = randomInt(STAR_COUNT_MIN, STAR_COUNT_MAX);
-          const chosen = pickMany(teammates, count);
+          const possibleTargets = [
+            ...teammates,
+            { name: playerNameRef.current, x: ng.player.x, y: ng.player.y },
+          ];
+          const chosen = pickMany(possibleTargets, count);
           const newStars = chosen.map((t, i) => makeStar(t.name, now, ng.starId + i));
           ng.stars = [...ng.stars, ...newStars];
           ng.starId += newStars.length;
@@ -284,7 +423,11 @@ export default function App() {
         }
 
         if (!ng.finalStarsDone && now >= SIM_SECONDS) {
-          const newStars = teammates.map((t, i) => makeStar(t.name, now, ng.starId + i, true));
+          const allTargets = [
+            ...teammates,
+            { name: playerNameRef.current, x: ng.player.x, y: ng.player.y },
+          ];
+          const newStars = allTargets.map((t, i) => makeStar(t.name, now, ng.starId + i, true));
           ng.stars = [...ng.stars, ...newStars];
           ng.starId += newStars.length;
           ng.finalStarsDone = true;
@@ -302,9 +445,17 @@ export default function App() {
           for (const s of ng.stars) {
             if (now < s.activeAt) continue;
 
-            const holder = s.target === 'Frost' ? ng.player : teammates.find((t) => t.name === s.target);
+            const holder =
+              s.target === playerNameRef.current
+                ? ng.player
+                : teammates.find((t) => t.name === s.target);
+
             if (holder && starHitsCircle(holder, s, crystalPos, CRYSTAL_R)) {
-              return { ...ng, running: false, failed: `Crystal wurde von der Starsplinter-Explosion von ${s.target} getroffen.` };
+              return {
+                ...ng,
+                running: false,
+                failed: `Crystal wurde von der Starsplinter-Explosion von ${s.target} getroffen.`,
+              };
             }
           }
         }
@@ -321,13 +472,13 @@ export default function App() {
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [teammates]);
+  }, [teammates, setupOpen, recording]);
 
   const nextBeamCountdown = Math.max(0, game.nextBeam - game.time);
   const beamAnnouncement = nextBeamCountdown <= BEAM_WARNING && game.time < SIM_SECONDS + 1;
   const crystalAge = game.crystal ? game.time - game.crystal.droppedAt : 0;
   const success = game.failed && game.failed.startsWith('Clear');
-  const playerStar = game.stars.find((s) => s.target === 'Frost');
+  const playerStar = game.stars.find((s) => s.target === playerName);
 
   return (
     <main className="app">
@@ -359,16 +510,13 @@ export default function App() {
 
             {teammates.map((t) => {
               const activeStar = game.stars.find((s) => s.target === t.name);
-              const isFrost = t.name === 'Frost';
               return (
                 <React.Fragment key={t.name}>
-                  {!isFrost && activeStar && <Star x={t.x} y={t.y} star={activeStar} now={game.time} />}
-                  {!isFrost && (
-                    <div className="teammate" style={{ left: t.x, top: t.y }}>
-                      <div className="teammateIcon" />
-                      <div className="name">{t.name}</div>
-                    </div>
-                  )}
+                  {activeStar && <Star x={t.x} y={t.y} star={activeStar} now={game.time} />}
+                  <div className="teammate" style={{ left: t.x, top: t.y }}>
+                    <div className="teammateIcon" />
+                    <div className="name">{t.name}</div>
+                  </div>
                 </React.Fragment>
               );
             })}
@@ -388,9 +536,10 @@ export default function App() {
             )}
 
             <div className="player" style={{ left: game.player.x, top: game.player.y }}>
-              {game.hasCrystal && <div className="carriedCrystal" />}
-              <div className="playerIcon" />
-              <div className="playerName">Frost</div>
+              <div className={game.hasCrystal ? 'playerIcon hasCrystal' : 'playerIcon'}>
+                {game.hasCrystal && <div className="innerCrystal" />}
+              </div>
+              <div className="playerName">{playerName}</div>
             </div>
 
             {beamAnnouncement && game.running && (
@@ -404,7 +553,7 @@ export default function App() {
                 <div className={success ? 'resultBox success' : 'resultBox fail'}>
                   <h2>{success ? 'Clear' : 'Wipe'}</h2>
                   <p>{game.failed}</p>
-                  <button onClick={restart}>Retry</button>
+                  <button onClick={() => restart()}>Retry</button>
                 </div>
               </div>
             )}
@@ -413,7 +562,28 @@ export default function App() {
 
         <aside className="panel sidebar">
           <h1>L'ura Crystal Trainer</h1>
-          <p>WASD bewegen. Shift + Q legt den Crystal ab. Nach dem Drop kurz rauslaufen, dann wieder drüberlaufen zum Aufheben.</p>
+          <p>WASD bewegen. Dein Action-Button legt den Crystal ab. Danach kurz rauslaufen und wieder drüberlaufen zum Aufheben.</p>
+
+          <div className="settingsBox">
+            <label>
+              Player
+              <select value={playerName} onChange={(e) => handlePlayerChange(e.target.value)}>
+                {raid.map(([name]) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </label>
+
+            <div className="keybindRow">
+              <div>
+                <span>Action-Button</span>
+                <b>{comboLabel(actionCombo)}</b>
+              </div>
+              <button className="smallButton" onClick={() => setRecording(true)}>
+                Ändern
+              </button>
+            </div>
+          </div>
 
           <div className="stats">
             <Stat label="Timer" value={`${game.time.toFixed(1)}s / ${SIM_SECONDS}s`} />
@@ -434,14 +604,53 @@ export default function App() {
           </div>
 
           <div className="infoBox">
-            <strong>Simulation</strong>
-            <p>Alle 5 Sekunden spawnen 4 zufällige Beams. 3 Sekunden Warnung, dann 2 Sekunden aktiv.</p>
-            <p>Starsplinter geht zufällig auf 5 bis 6 Spieler. Nach 3 Sekunden explodiert der Stern kurz. Bei 30 Sekunden bekommt jeder einen Stern.</p>
+            <strong>Hinweis</strong>
+            <p>Manche System-Shortcuts wie Alt + F4 können Browser oder Betriebssystem blocken. Normale Tasten, F-Tasten und Kombis mit Ctrl, Shift oder Alt funktionieren in der Regel.</p>
           </div>
 
-          <button className="restart" onClick={restart}>Restart Run</button>
+          <button className="restart" onClick={() => restart()}>Restart Run</button>
         </aside>
       </section>
+
+      {setupOpen && (
+        <div className="modalOverlay">
+          <div className="modal">
+            <h2>Setup</h2>
+            <p>Wähle deinen Player und lege deinen Crystal-Drop-Button fest.</p>
+
+            <label>
+              Player
+              <select value={playerName} onChange={(e) => setPlayerName(e.target.value)}>
+                {raid.map(([name]) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </label>
+
+            <div className="recordBox">
+              <span>Action-Button</span>
+              <b>{comboLabel(actionCombo)}</b>
+              <button onClick={() => setRecording(true)}>
+                Taste aufnehmen
+              </button>
+            </div>
+
+            <button className="restart" onClick={() => applySettings(playerName, actionCombo)}>
+              Start
+            </button>
+          </div>
+        </div>
+      )}
+
+      {recording && (
+        <div className="modalOverlay topLayer">
+          <div className="modal keyModal">
+            <h2>Taste drücken</h2>
+            <p>Drücke jetzt deine gewünschte Taste oder Kombination, zum Beispiel B, F4, Ctrl + X oder Shift + Q.</p>
+            <button onClick={() => setRecording(false)}>Abbrechen</button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
