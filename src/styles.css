@@ -170,6 +170,11 @@ button {
   box-shadow: 0 0 18px rgba(253, 224, 71, 0.95);
 }
 
+.crystal.pickupReady {
+  outline: 3px solid rgba(34, 197, 94, 0.85);
+  outline-offset: 3px;
+}
+
 .carriedCrystal {
   left: 50%;
   top: -22px;
@@ -180,7 +185,15 @@ button {
 .star {
   position: absolute;
   pointer-events: none;
-  opacity: 0.72;
+}
+
+.starWarning {
+  opacity: 0.74;
+}
+
+.starActive {
+  opacity: 1;
+  filter: drop-shadow(0 0 12px rgba(248, 113, 113, 0.95));
 }
 
 .playerStar {

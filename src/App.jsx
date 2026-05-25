@@ -13,11 +13,16 @@ const BEAM_WARNING = 3;
 const BEAM_ACTIVE = 2;
 const BEAM_WIDTH = 48;
 
-const STAR_DURATION = 4.2;
+const STAR_WARNING = 3;
+const STAR_ACTIVE = 0.85;
+const STAR_TOTAL = STAR_WARNING + STAR_ACTIVE;
 const STAR_INTERVAL_MIN = 3.2;
 const STAR_INTERVAL_MAX = 5.0;
 const STAR_COUNT_MIN = 5;
 const STAR_COUNT_MAX = 6;
+
+const PICKUP_DISTANCE = PLAYER_R + CRYSTAL_R + 5;
+const REARM_PICKUP_DISTANCE = PLAYER_R + CRYSTAL_R + 18;
 
 const raid = [
   ['Pains', 250, 95],
@@ -87,7 +92,8 @@ function makeStar(target, now, id, final = false) {
     id,
     target,
     start: now,
-    end: now + STAR_DURATION,
+    activeAt: now + STAR_WARNING,
+    end: now + STAR_TOTAL,
     rays,
     rotation: Math.random() * Math.PI * 2,
     final,
@@ -175,15 +181,23 @@ export default function App() {
 
   useEffect(() => {
     const down = (e) => {
+      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
+        e.preventDefault();
+      }
       keys.current[e.code] = true;
-      if (e.code === 'KeyQ' && e.shiftKey) e.preventDefault();
     };
+
     const up = (e) => {
+      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
+        e.preventDefault();
+      }
       keys.current[e.code] = false;
       if (e.code === 'KeyQ') shiftQDown.current = false;
     };
-    window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
+
+    window.addEventListener('keydown', down, { passive: false });
+    window.addEventListener('keyup', up, { passive: false });
+
     return () => {
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
@@ -225,14 +239,27 @@ export default function App() {
           shiftQDown.current = true;
           if (ng.hasCrystal) {
             ng.hasCrystal = false;
-            ng.crystal = { x: ng.player.x, y: ng.player.y, droppedAt: now };
+            ng.crystal = {
+              x: ng.player.x,
+              y: ng.player.y,
+              droppedAt: now,
+              pickupArmed: false,
+            };
             ng.drops += 1;
           }
         }
 
-        if (!ng.hasCrystal && ng.crystal && dist(ng.player, ng.crystal) <= PLAYER_R + CRYSTAL_R + 3) {
-          ng.hasCrystal = true;
-          ng.crystal = null;
+        if (!ng.hasCrystal && ng.crystal) {
+          const distanceToCrystal = dist(ng.player, ng.crystal);
+
+          if (!ng.crystal.pickupArmed && distanceToCrystal >= REARM_PICKUP_DISTANCE) {
+            ng.crystal = { ...ng.crystal, pickupArmed: true };
+          }
+
+          if (ng.crystal.pickupArmed && distanceToCrystal <= PICKUP_DISTANCE) {
+            ng.hasCrystal = true;
+            ng.crystal = null;
+          }
         }
 
         if (!ng.hasCrystal && ng.crystal && now - ng.crystal.droppedAt > 5) {
@@ -273,14 +300,16 @@ export default function App() {
           }
 
           for (const s of ng.stars) {
+            if (now < s.activeAt) continue;
+
             const holder = s.target === 'Frost' ? ng.player : teammates.find((t) => t.name === s.target);
             if (holder && starHitsCircle(holder, s, crystalPos, CRYSTAL_R)) {
-              return { ...ng, running: false, failed: `Crystal berührt Starsplinter von ${s.target}.` };
+              return { ...ng, running: false, failed: `Crystal wurde von der Starsplinter-Explosion von ${s.target} getroffen.` };
             }
           }
         }
 
-        if (ng.finalStarsDone && ng.stars.length === 0 && now > SIM_SECONDS + STAR_DURATION) {
+        if (ng.finalStarsDone && ng.stars.length === 0 && now > SIM_SECONDS + STAR_TOTAL) {
           return { ...ng, running: false, failed: 'Clear. Intermission sauber überlebt.' };
         }
 
@@ -333,7 +362,7 @@ export default function App() {
               const isFrost = t.name === 'Frost';
               return (
                 <React.Fragment key={t.name}>
-                  {!isFrost && activeStar && <Star x={t.x} y={t.y} star={activeStar} />}
+                  {!isFrost && activeStar && <Star x={t.x} y={t.y} star={activeStar} now={game.time} />}
                   {!isFrost && (
                     <div className="teammate" style={{ left: t.x, top: t.y }}>
                       <div className="teammateIcon" />
@@ -344,11 +373,11 @@ export default function App() {
               );
             })}
 
-            {playerStar && <Star x={game.player.x} y={game.player.y} star={playerStar} player />}
+            {playerStar && <Star x={game.player.x} y={game.player.y} star={playerStar} now={game.time} player />}
 
             {game.crystal && (
               <div
-                className="crystal"
+                className={game.crystal.pickupArmed ? 'crystal pickupReady' : 'crystal'}
                 style={{
                   left: game.crystal.x,
                   top: game.crystal.y,
@@ -384,7 +413,7 @@ export default function App() {
 
         <aside className="panel sidebar">
           <h1>L'ura Crystal Trainer</h1>
-          <p>WASD bewegen. Shift + Q legt den Crystal ab. Drüberlaufen sammelt ihn wieder ein.</p>
+          <p>WASD bewegen. Shift + Q legt den Crystal ab. Nach dem Drop kurz rauslaufen, dann wieder drüberlaufen zum Aufheben.</p>
 
           <div className="stats">
             <Stat label="Timer" value={`${game.time.toFixed(1)}s / ${SIM_SECONDS}s`} />
@@ -401,13 +430,13 @@ export default function App() {
             <strong>Fail Conditions</strong>
             <p>Crystal liegt länger als 5 Sekunden.</p>
             <p>Crystal wird vom aktiven Beam getroffen.</p>
-            <p>Ein Starsplinter-Ray berührt den Crystal, egal ob getragen oder abgelegt.</p>
+            <p>Starsplinter darf den Crystal während der 3 Sekunden Warnzeit berühren. Erst die Explosion danach zählt als Hit.</p>
           </div>
 
           <div className="infoBox">
             <strong>Simulation</strong>
             <p>Alle 5 Sekunden spawnen 4 zufällige Beams. 3 Sekunden Warnung, dann 2 Sekunden aktiv.</p>
-            <p>Starsplinter geht zufällig auf 5 bis 6 Spieler. Bei 30 Sekunden bekommt jeder einen Stern.</p>
+            <p>Starsplinter geht zufällig auf 5 bis 6 Spieler. Nach 3 Sekunden explodiert der Stern kurz. Bei 30 Sekunden bekommt jeder einen Stern.</p>
           </div>
 
           <button className="restart" onClick={restart}>Restart Run</button>
@@ -426,12 +455,13 @@ function Stat({ label, value, danger }) {
   );
 }
 
-function Star({ x, y, star, player }) {
+function Star({ x, y, star, now, player }) {
   const size = 320;
   const center = size / 2;
   const inner = 18;
   const outer = 145;
   const segments = [];
+  const active = now >= star.activeAt;
 
   for (let i = 0; i < star.rays; i++) {
     const a = star.rotation + (i / star.rays) * Math.PI * 2;
@@ -445,7 +475,11 @@ function Star({ x, y, star, player }) {
 
   return (
     <svg
-      className={player ? 'star playerStar' : 'star'}
+      className={[
+        'star',
+        player ? 'playerStar' : '',
+        active ? 'starActive' : 'starWarning',
+      ].join(' ')}
       width={size}
       height={size}
       style={{ left: x - center, top: y - center }}
@@ -457,10 +491,10 @@ function Star({ x, y, star, player }) {
           y1={s.y1}
           x2={s.x2}
           y2={s.y2}
-          stroke="rgb(56 189 248)"
-          strokeWidth="10"
+          stroke={active ? 'rgb(248 113 113)' : 'rgb(56 189 248)'}
+          strokeWidth={active ? '14' : '8'}
           strokeLinecap="round"
-          opacity="0.9"
+          opacity={active ? '0.98' : '0.55'}
         />
       ))}
       <circle cx={center} cy={center} r="8" fill="rgb(15 23 42)" stroke="white" strokeWidth="2" />

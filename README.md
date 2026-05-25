@@ -1,19 +1,18 @@
-# L'ura Crystal Trainer
+# L'ura Crystal Trainer v2
 
-Kleines Vite/React-Minispiel zum Trainieren der L'ura Intermission Crystal-Drop-Mechanik.
+Änderungen in v2:
+
+- Shift + Q Drop gefixt.
+- Crystal wird nach dem Drop nicht sofort wieder eingesammelt.
+- Du musst kurz aus dem Crystal rauslaufen, dann wird Pickup wieder aktiv.
+- Starsplinter hat jetzt 3 Sekunden Warnzeit.
+- Starsplinter verursacht erst bei der Explosion Schaden am Crystal, nicht während der Warnphase.
 
 ## Lokal starten
 
 ```bash
 npm install
 npm run dev
-```
-
-## Build testen
-
-```bash
-npm run build
-npm run preview
 ```
 
 ## Vercel
